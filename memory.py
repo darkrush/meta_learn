@@ -15,7 +15,14 @@ class RingBuffer(object):
         if idx < 0 or idx >= self.length:
             raise KeyError()
         return self.data[(self.start + idx) % self.maxlen]
-
+    
+    def get_item(self, idx):
+        return self.__getitem__(idx)
+        
+    def reset(self):
+        self.start = 0
+        self.length = 0
+    
     def get_batch(self, idxs):
         return self.data[(self.start + idxs) % self.maxlen]
 
@@ -48,7 +55,15 @@ class Memory(object):
         self.rewards = RingBuffer(limit, shape=(1,))
         self.terminals1 = RingBuffer(limit, shape=(1,))
         self.observations1 = RingBuffer(limit, shape=observation_shape)
-
+    
+    def getitem(self, idx):
+        obs0 = self.observations0.get_item(idx)
+        action = self.actions.get_item(idx)
+        reward = self.rewards.get_item(idx)
+        obs1 = self.observations1.get_item(idx)
+        terminal1 = self.terminals1.get_item(idx)
+        return (obs0, action, reward, obs1, terminal1)
+    
     def sample(self, batch_size):
         # Draw such that we always have a proceeding element.
         batch_idxs = np.random.random_integers(self.nb_entries - 2, size=batch_size)
@@ -67,7 +82,14 @@ class Memory(object):
             'terminals1': array_min2d(terminal1_batch),
         }
         return result
-
+        
+    def reset(self):
+        self.observations0.reset()
+        self.actions.reset()
+        self.rewards.reset()
+        self.observations1.reset()
+        self.terminals1.reset()
+        
     def append(self, obs0, action, reward, obs1, terminal1, training=True):
         if not training:
             return
