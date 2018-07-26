@@ -1,0 +1,97 @@
+		('sess', <tensorflow.python.client.session.Session object at 0x7fc68f019c88>)
+
+		('perturbed_actor_tf', <tf.Tensor 'param_noise_actor/Tanh:0' shape=(?, 6) dtype=float32>)
+		('actor_tf', <tf.Tensor 'actor/Tanh:0' shape=(?, 6) dtype=float32>)
+		('normalized_critic_tf', <tf.Tensor 'critic/dense_3/BiasAdd:0' shape=(?, 1) dtype=float32>)
+		('critic_tf', <tf.Tensor 'clip_by_value_2:0' shape=(?, 1) dtype=float32>)
+		('normalized_critic_with_actor_tf', <tf.Tensor 'critic_1/dense_3/BiasAdd:0' shape=(?, 1) dtype=float32>)
+		('critic_with_actor_tf', <tf.Tensor 'clip_by_value_3:0' shape=(?, 1) dtype=float32>)
+		('adaptive_policy_distance', <tf.Tensor 'Sqrt:0' shape=() dtype=float32>)
+		
+		('actor_loss', <tf.Tensor 'Neg:0' shape=() dtype=float32>)
+		('actor_grads', <tf.Tensor 'concat:0' shape=(5958,) dtype=float32>)
+		('critic_loss', <tf.Tensor 'add_13:0' shape=() dtype=float32>)
+		('critic_grads', <tf.Tensor 'concat_2:0' shape=(6017,) dtype=float32>)
+		
+		('target_Q', <tf.Tensor 'add:0' shape=(?, 1) dtype=float32>)
+		
+#holder ('rewards', <tf.Tensor 'rewards:0' shape=(?, 1) dtype=float32>)
+#holder ('terminals1', <tf.Tensor 'terminals1:0' shape=(?, 1) dtype=float32>)
+#holder ('obs1', <tf.Tensor 'obs1:0' shape=(?, 17) dtype=float32>)
+#holder ('actions', <tf.Tensor 'actions:0' shape=(?, 6) dtype=float32>)
+#holder ('obs0', <tf.Tensor 'obs0:0' shape=(?, 17) dtype=float32>)
+#holder ('param_noise_stddev', <tf.Tensor 'param_noise_stddev:0' shape=() dtype=float32>)
+#holder ('critic_target', <tf.Tensor 'critic_target:0' shape=(?, 1) dtype=float32>)
+#update ('target_soft_updates', [<tf.Operation 'group_deps_5' type=NoOp>, <tf.Operation 'group_deps_7' type=NoOp>])
+#init   ('target_init_updates', [<tf.Operation 'group_deps_4' type=NoOp>, <tf.Operation 'group_deps_6' type=NoOp>])
+#update ('perturb_adaptive_policy_ops', <tf.Operation 'group_deps_1' type=NoOp>)
+#update ('perturb_policy_ops', <tf.Operation 'group_deps' type=NoOp>)
+
+
+
+('param_noise', AdaptiveParamNoiseSpec(initial_stddev=0.2, desired_action_stddev=0.2, adoption_coefficient=1.01))
+('memory', <memory.Memory object at 0x7fc6ef833710>)
+('target_critic', <models.Critic object at 0x7fc6ef7df5f8>)
+('target_actor', <models.Actor object at 0x7fc6eb14f780>)
+('critic', <models.Critic object at 0x7fc6ef7ca828>)
+('actor', <models.Actor object at 0x7fc6ef7ca860>)
+('critic_optimizer', <baselines.common.mpi_adam.MpiAdam object at 0x7fc68f785e48>)
+('actor_optimizer', <baselines.common.mpi_adam.MpiAdam object at 0x7fc69408bc50>)
+('obs_rms', <baselines.common.mpi_running_mean_std.RunningMeanStd object at 0x7fc6ef7df438>)
+
+
+('ret_rms', None)
+('clip_norm', None)
+('stats_sample', None)
+('action_noise', None)
+
+
+
+('normalize_observations', True)
+('enable_popart', False)
+('normalize_returns', False)
+
+
+
+
+('return_range', (-inf, inf))
+('action_range', (-1.0, 1.0))
+('observation_range', (-5.0, 5.0))
+('batch_size', 64)
+('critic_l2_reg', 0.01)
+('reward_scale', 1.0)
+('critic_lr', 0.001)
+('actor_lr', 0.0001)
+('gamma', 0.99)
+('tau', 0.01)
+
+
+
+('stats_names', ['obs_rms_mean', 'obs_rms_std', 'reference_Q_mean', 'reference_Q_std', 'reference_actor_Q_mean', 'reference_actor_Q_std', 'reference_action_mean', 'reference_action_std', 'reference_perturbed_action_mean', 'reference_perturbed_action_std'])
+('stats_ops', [<tf.Tensor 'Mean_3:0' shape=() dtype=float32>, <tf.Tensor 'Mean_4:0' shape=() dtype=float32>, <tf.Tensor 'Mean_5:0' shape=() dtype=float32>, <tf.Tensor 'Sqrt_1:0' shape=() dtype=float32>, <tf.Tensor 'Mean_8:0' shape=() dtype=float32>, <tf.Tensor 'Sqrt_2:0' shape=() dtype=float32>, <tf.Tensor 'Mean_11:0' shape=() dtype=float32>, <tf.Tensor 'Sqrt_3:0' shape=() dtype=float32>, <tf.Tensor 'Mean_14:0' shape=() dtype=float32>, <tf.Tensor 'Sqrt_4:0' shape=() dtype=float32>])
+
+obs_rms_mean		tf.Tensor 'Mean_3:0' shape=() dtype=float32
+'obs_rms_std		tf.Tensor 'Mean_4:0' shape=() dtype=float32
+reference_Q_mean		tf.Tensor 'Mean_5:0' shape=() dtype=float32
+reference_Q_std		tf.Tensor 'Sqrt_1:0' shape=() dtype=float32
+reference_actor_Q_mean		tf.Tensor 'Mean_8:0' shape=() dtype=float32
+reference_actor_Q_std		tf.Tensor 'Sqrt_2:0' shape=() dtype=float32
+reference_action_mean		tf.Tensor 'Mean_11:0' shape=() dtype=float32
+reference_action_std		tf.Tensor 'Sqrt_3:0' shape=() dtype=float32
+reference_perturbed_action_mean		tf.Tensor 'Mean_14:0' shape=() dtype=float32
+reference_perturbed_action_std		tf.Tensor 'Sqrt_4:0' shape=() dtype=float32
+
+
+'reset'							#reset noise
+'get_stats'						#use one sample of memory to estimate state
+'initialize'					#init sess,two optimizer, target_net
+'pi' 							#feed the obs and get one action from actor/perturbed_actor
+'setup_actor_optimizer'			#setup :actor_loss / actor_grads / actor_optimizer
+'setup_critic_optimizer'		#setup :critic_loss / critic_grads / critic_optimizer
+'setup_param_noise'				#setup :perturbed_actor_tf / perturb_policy_ops / perturb_adaptive_policy_ops / adaptive_policy_distance
+'setup_popart'					#setup :old_std / old_mean / renormalize_Q_outputs_op
+'setup_stats'					#setup :stats_ops / stats_names
+'setup_target_network_updates'	#setup :target_init_updates / target_soft_updates
+'store_transition'				#store one step into memory
+'train'  						#use one batch sample of memory to update Actor-Critic, and calc actor_loss&critic_loss
+'adapt_param_noise'				#update adapt noise param and return the distance
