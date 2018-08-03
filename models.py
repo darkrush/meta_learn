@@ -47,7 +47,7 @@ class Actor(Model):
     
     
 class Teacher(Model):
-  def __init__(self, nb_actions, name='teacher', layer_norm=True, independe = False):
+  def __init__(self, nb_actions, name='teacher', layer_norm=True, independe = True):
     super(Teacher, self).__init__(name=name)
     self.nb_actions = nb_actions
     self.layer_norm = layer_norm
@@ -72,7 +72,7 @@ class Teacher(Model):
       x = tf.layers.dense(x, self.nb_actions, kernel_initializer=tf.random_uniform_initializer(minval=-3e-3, maxval=3e-3))
       var = tf.exp(x)
       
-      if independe:
+      if self.independe:
         x = obs
         x = tf.layers.dense(x, 64)
         if self.layer_norm:

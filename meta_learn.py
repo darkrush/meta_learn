@@ -61,11 +61,11 @@ def get_perturbed_actor_updates(actor, perturbed_actor, param_noise_stddev):
 
 
 class META_LEARN(object):
-  def __init__(self, actor, critic, teacher= None, memory, memory_d0, memory_d1, observation_shape, action_shape, param_noise=None, action_noise=None,
+  def __init__(self, actor, critic, teacher, memory, memory_d0, memory_d1, observation_shape, action_shape, param_noise=None, action_noise=None,
     gamma=0.99, tau=0.001, normalize_returns=False, enable_popart=False, normalize_observations=True,
     batch_size=128, observation_range=(-5., 5.), action_range=(-1., 1.), return_range=(-np.inf, np.inf),
     adaptive_param_noise=True, adaptive_param_noise_policy_threshold=.1,
-    critic_l2_reg=0., actor_lr=1e-4, critic_lr=1e-3, clip_norm=None, reward_scale=1.):
+    critic_l2_reg=0., actor_lr=1e-4, critic_lr=1e-3,teacher_actor_lr=1e-4, clip_norm=None, reward_scale=1.):
     # Inputs.
     self.obs0 = tf.placeholder(tf.float32, shape=(None,) + observation_shape, name='obs0')
     self.obs1 = tf.placeholder(tf.float32, shape=(None,) + observation_shape, name='obs1')
@@ -96,6 +96,7 @@ class META_LEARN(object):
     self.teacher_actor = teacher  
     self.actor_lr = actor_lr
     self.critic_lr = critic_lr
+    self.teacher_actor_lr = teacher_actor_lr
     self.clip_norm = clip_norm
     self.enable_popart = enable_popart
     self.reward_scale = reward_scale
@@ -144,7 +145,8 @@ class META_LEARN(object):
     
     # Create networks and core TF parts that are shared across setup parts.
     self.teacher_actor_mean_tf,self.teacher_actor_var_tf = self.teacher_actor(normalized_obs0)
-    self.teacher_actor_tf = self.teacher_actor_mean_tf + tf.random_normal(self.teacher_actor_var_tf.shape) * self.teacher_actor_var_tf
+
+    self.teacher_actor_tf = self.teacher_actor_mean_tf + tf.random_normal(shape = tf.shape(self.teacher_actor_var_tf)) * self.teacher_actor_var_tf
     self.logpdf_teacher_actor_tf = - tf.log(self.teacher_actor_var_tf)-tf.square((self.actions-self.teacher_actor_mean_tf)/self.teacher_actor_var_tf)/2
     
     self.actor_tf = actor(normalized_obs0)
@@ -163,7 +165,7 @@ class META_LEARN(object):
     Q_obs1 = denormalize(target_critic(normalized_obs1, target_actor(normalized_obs1)), self.ret_rms)
     self.target_Q = self.rewards + (1. - self.terminals1) * gamma * Q_obs1
     
-    explore_Q_obs1 = denormalize(target_critic(normalized_obs1, target_explore_actor(normalized_obs1)), self.ret_rms)
+    explore_Q_obs1 = denormalize(target_critic(normalized_obs1, target_explore_actor(normalized_obs1),reuse = True), self.ret_rms)
     self.explore_target_Q = self.rewards + (1. - self.terminals1) * gamma * explore_Q_obs1
     
     
@@ -174,15 +176,12 @@ class META_LEARN(object):
     self.setup_actor_optimizer()
     self.setup_critic_optimizer()
     self.setup_explore_actor_optimizer()
-    
+    self.setup_teacher_actor_optimizer()
     if self.normalize_returns and self.enable_popart:
       self.setup_popart()
     self.setup_stats()
-    self.setup_explore_network_copy_updates()
-    self.setup_explore_target_network_updates()
     self.setup_target_network_updates()
 
-  def setup_explore_network_copy_updates(self):
 
 
   
@@ -456,6 +455,22 @@ class META_LEARN(object):
 
     return critic_loss, explore_actor_loss  
   
+  
+  
+  def teacher_train(self, meta_reward):
+    # Get all data in memory d0.
+    batch = self.memory_d0.sample(batch_size=self.memory_d0.nb_entries)
+    # Get all gradients and perform a synced update.
+    ops = [self.teacher_actor_grads, self.teacher_actor_loss]
+    teacher_actor_grads, teacher_actor_loss = self.sess.run(ops, feed_dict={
+      self.meta_reward: meta_reward,
+      self.obs0: batch['obs0'],
+      self.actions: batch['actions'],
+    })
+    self.teacher_actor_optimizer.update(teacher_actor_grads, stepsize=self.teacher_actor_lr)
+
+    return teacher_actor_loss
+
     
   def initialize(self, sess):
     self.sess = sess
@@ -468,6 +483,12 @@ class META_LEARN(object):
   def update_target_net(self):
     self.sess.run(self.target_soft_updates)
 
+  def update_explore_target_net(self):
+    self.sess.run(self.explore_target_soft_updates)
+    
+  def copy_explore_actor_net(self):
+    self.sess.run(self.explore_copy_updates)
+    
   def get_stats(self):
     if self.stats_sample is None:
       # Get a sample and keep that fixed for all further computations.

@@ -8,7 +8,7 @@ from baselines.common.misc_util import (
     boolean_flag,
 )
 import training_meta as training
-from models import Actor, Critic
+from models import Actor, Critic ,Teacher
 from memory import Memory
 from noise import *
 
@@ -59,6 +59,7 @@ def run(env_id, seed, noise_type, layer_norm, evaluation, **kwargs):
     memory_d1 = Memory(limit=int(1e4), action_shape=env.action_space.shape, observation_shape=env.observation_space.shape)
     critic = Critic(layer_norm=layer_norm)
     actor = Actor(nb_actions, layer_norm=layer_norm)
+    teacher = Teacher(nb_actions, layer_norm=layer_norm)
 
     # Seed everything to make things reproducible.
     seed = seed + 1000000 * rank
@@ -72,8 +73,8 @@ def run(env_id, seed, noise_type, layer_norm, evaluation, **kwargs):
     # Disable logging for rank != 0 to avoid noise.
     if rank == 0:
         start_time = time.time()
-    training.train(env=env, eval_env=eval_env, param_noise=param_noise,
-        action_noise=action_noise, actor=actor, critic=critic, memory=memory, memory_d0=memory_d0, memory_d1=memory_d1, **kwargs)
+    training.train_meta(env=env, eval_env=eval_env, param_noise=param_noise,
+        action_noise=action_noise, actor=actor, critic=critic, teacher = teacher, memory=memory, memory_d0=memory_d0, memory_d1=memory_d1, **kwargs)
     env.close()
     if eval_env is not None:
         eval_env.close()
@@ -104,6 +105,10 @@ def parse_args():
     parser.add_argument('--nb-train-steps', type=int, default=50)  # per epoch cycle and MPI worker
     parser.add_argument('--nb-eval-steps', type=int, default=100)  # per epoch cycle and MPI worker
     parser.add_argument('--nb-rollout-steps', type=int, default=100)  # per epoch cycle and MPI worker
+    parser.add_argument('--nb-explore-rollout-steps', type=int, default=100)
+    parser.add_argument('--nb-explore-eval-rollout-steps', type=int, default=200)
+    parser.add_argument('--nb-explore-train-steps', type=int, default=1)
+    
     parser.add_argument('--noise-type', type=str, default='adaptive-param_0.2')  # choices are adaptive-param_xx, ou_xx, normal_xx, none
     parser.add_argument('--num-timesteps', type=int, default=None)
     boolean_flag(parser, 'evaluation', default=False)
