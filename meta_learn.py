@@ -477,7 +477,8 @@ class META_LEARN(object):
     self.sess.run(tf.global_variables_initializer())
     self.actor_optimizer.sync()
     self.critic_optimizer.sync()
-    self.setup_explore_actor_optimizer()
+    self.teacher_actor_optimizer.sync()
+    self.explore_actor_optimizer.sync()
     self.sess.run(self.target_init_updates)
 
   def update_target_net(self):

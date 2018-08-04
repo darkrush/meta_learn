@@ -43,7 +43,18 @@ def train(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, render, pa
         # Prepare everything.
         agent.initialize(sess)
         sess.graph.finalize()
-
+        '''    
+        print(dir(agent))
+        
+        agent_dict = agent.__dict__.items()
+        for item in agent_dict:
+            print(item)
+        
+        writer = tf.summary.FileWriter("log/",sess.graph)
+    writer.close()    
+        '''    
+        
+        
         agent.reset()
         obs = env.reset()
         if eval_env is not None:
