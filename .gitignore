@@ -1,2 +1,6 @@
 __pycache__/
+ddpglog/
+meta_log/
 log/
+meta_board/
+return.csv

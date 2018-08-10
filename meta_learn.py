@@ -162,11 +162,11 @@ class META_LEARN(object):
     self.normalized_critic_with_explore_actor_tf = critic(normalized_obs0, self.explore_actor_tf, reuse=True)
     self.critic_with_explore_actor_tf = denormalize(tf.clip_by_value(self.normalized_critic_with_explore_actor_tf, self.return_range[0], self.return_range[1]), self.ret_rms)
     
-    Q_obs1 = denormalize(target_critic(normalized_obs1, target_actor(normalized_obs1)), self.ret_rms)
-    self.target_Q = self.rewards + (1. - self.terminals1) * gamma * Q_obs1
+    self.Q_obs1 = denormalize(target_critic(normalized_obs1, target_actor(normalized_obs1)), self.ret_rms)
+    self.target_Q = self.rewards + (1. - self.terminals1) * gamma * self.Q_obs1
     
-    explore_Q_obs1 = denormalize(target_critic(normalized_obs1, target_explore_actor(normalized_obs1),reuse = True), self.ret_rms)
-    self.explore_target_Q = self.rewards + (1. - self.terminals1) * gamma * explore_Q_obs1
+    self.explore_Q_obs1 = denormalize(target_critic(normalized_obs1, target_explore_actor(normalized_obs1),reuse = True), self.ret_rms)
+    self.explore_target_Q = self.rewards + (1. - self.terminals1) * gamma * self.explore_Q_obs1
     
     
 
@@ -252,8 +252,8 @@ class META_LEARN(object):
 
   def setup_critic_optimizer(self):
     logger.info('setting up critic optimizer')
-    normalized_critic_target_tf = tf.clip_by_value(normalize(self.critic_target, self.ret_rms), self.return_range[0], self.return_range[1])
-    self.critic_loss = tf.reduce_mean(tf.square(self.normalized_critic_tf - normalized_critic_target_tf))
+    self.normalized_critic_target_tf = tf.clip_by_value(normalize(self.critic_target, self.ret_rms), self.return_range[0], self.return_range[1])
+    self.critic_loss = tf.reduce_mean(tf.square(self.normalized_critic_tf - self.normalized_critic_target_tf))
     if self.critic_l2_reg > 0.:
       critic_reg_vars = [var for var in self.critic.trainable_vars if 'kernel' in var.name and 'output' not in var.name]
       for var in critic_reg_vars:
@@ -332,15 +332,17 @@ class META_LEARN(object):
         actor_tf = self.perturbed_actor_tf
       else:
         actor_tf = self.actor_tf
+      critic_with_actor_tf = self.critic_with_actor_tf
     elif which_actor == 1:
       actor_tf = self.explore_actor_tf
+      critic_with_actor_tf = self.critic_with_explore_actor_tf
     elif which_actor == 2:
       actor_tf = self.teacher_actor_tf
     else:
       raise ValueError("Which_actor can only equal 0,1,2 but here get{}".format(which_actor))
     feed_dict = {self.obs0: [obs]}
     if compute_Q:
-      action, q = self.sess.run([actor_tf, self.critic_with_actor_tf], feed_dict=feed_dict)
+      action, q = self.sess.run([actor_tf, critic_with_actor_tf], feed_dict=feed_dict)
     else:
       action = self.sess.run(actor_tf, feed_dict=feed_dict)
       q = None
@@ -407,7 +409,6 @@ class META_LEARN(object):
     })
     self.actor_optimizer.update(actor_grads, stepsize=self.actor_lr)
     self.critic_optimizer.update(critic_grads, stepsize=self.critic_lr)
-
     return critic_loss, actor_loss
 
   def explore_train(self):
@@ -443,17 +444,18 @@ class META_LEARN(object):
         self.terminals1: batch['terminals1'].astype('float32'),
       })
 
+
     # Get all gradients and perform a synced update.
+    #normalized_critic_target_tf = tf.clip_by_value(normalize(self.critic_target, self.ret_rms), self.return_range[0], self.return_range[1])
     ops = [self.explore_actor_grads, self.explore_actor_loss, self.critic_grads, self.critic_loss]
-    explore_actor_grads, explore_actor_loss, critic_grads, critic_loss = self.sess.run(ops, feed_dict={
+    explore_actor_grads, explore_actor_loss, critic_grads, critic_loss= self.sess.run(ops, feed_dict={
       self.obs0: batch['obs0'],
       self.actions: batch['actions'],
       self.critic_target: explore_target_Q,
     })
     self.explore_actor_optimizer.update(explore_actor_grads, stepsize=self.actor_lr)
     self.critic_optimizer.update(critic_grads, stepsize=self.critic_lr)
-
-    return critic_loss, explore_actor_loss  
+    return critic_loss, explore_actor_loss
   
   
   
@@ -480,6 +482,7 @@ class META_LEARN(object):
     self.teacher_actor_optimizer.sync()
     self.explore_actor_optimizer.sync()
     self.sess.run(self.target_init_updates)
+    self.sess.run(self.explore_target_init_updates)
 
   def update_target_net(self):
     self.sess.run(self.target_soft_updates)

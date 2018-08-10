@@ -47,7 +47,6 @@ def train_meta(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, rende
     sess.graph.finalize()
     agent.reset()
     obs = env.reset()
-
     if eval_env is not None:
       eval_obs = eval_env.reset()
     done = False
@@ -70,8 +69,8 @@ def train_meta(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, rende
 
     
     last_reward=0
-    for t_explore_eval_rollout_steps in range(nb_explore_eval_rollout_steps):
-      t += 1
+    nb_reward_episodes = 0.0
+    for t_rollout_steps in range(nb_rollout_steps):
       action , q = agent.pi(obs, apply_noise=False, compute_Q=True, which_actor = 0)
       assert action.shape == env.action_space.shape
     # Execute next action.
@@ -79,10 +78,9 @@ def train_meta(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, rende
         env.render()
       assert max_action.shape == action.shape
       new_obs, r, done, info = env.step(max_action * action)  # scale for execution in env (as far as DDPG is concerned, every action is in [-1, 1])
-      last_reward += r
       episode_reward += r
       episode_step += 1
-      
+      last_reward += r
       epoch_actions.append(action)
       epoch_qs.append(q)
       
@@ -93,17 +91,21 @@ def train_meta(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, rende
         epoch_episode_rewards.append(episode_reward)
         episode_rewards_history.append(episode_reward)
         epoch_episode_steps.append(episode_step)
+        #last_reward +=episode_reward
+        nb_reward_episodes +=1.0
         episode_reward = 0.
         episode_step = 0
         epoch_episodes += 1
         episodes += 1
         agent.reset()
         obs = env.reset()      
-    
+    #last_reward = last_reward/nb_reward_episodes
+    #start to train
     #start to train
     for epoch in range(nb_epochs):
       for cycle in range(nb_epoch_cycles):
-        #Generate D0
+        
+        #Perform teacher rollouts
         for t_explore_rollout_steps in range(nb_explore_rollout_steps):
           t += 1
           action , _ = agent.pi(obs, apply_noise=False, compute_Q=False, which_actor = 2)
@@ -119,25 +121,29 @@ def train_meta(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, rende
         
         #explore update
         agent.copy_explore_actor_net()
-        for t_explore_train_steps in range(nb_train_steps):
-          agent.explore_train()
-          agent.update_explore_target_net()
-
-        #Generate D1
+        #for t_train_steps in range(nb_train_steps):
+        #  agent.explore_train()
+        #  agent.update_explore_target_net()
+        
         now_reward=0
-        for t_explore_eval_rollout_steps in range(nb_explore_eval_rollout_steps):
-          t += 1
-          action , q = agent.pi(obs, apply_noise=False, compute_Q=True, which_actor = 1)
+        nb_reward_episodes = 0.0
+        # Perform rollouts
+        for t_rollout_steps in range(nb_rollout_steps):
+          # Predict next action.
+          action , q = agent.pi(obs, apply_noise=True, compute_Q=True, which_actor = 1)
           assert action.shape == env.action_space.shape
+          
         # Execute next action.
           if rank == 0 and render:
             env.render()
           assert max_action.shape == action.shape
           new_obs, r, done, info = env.step(max_action * action)  # scale for execution in env (as far as DDPG is concerned, every action is in [-1, 1])
-          now_reward += r
+          t += 1
+          if rank == 0 and render:
+            env.render()
           episode_reward += r
           episode_step += 1
-          
+          now_reward +=r
           epoch_actions.append(action)
           epoch_qs.append(q)
           
@@ -148,13 +154,17 @@ def train_meta(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, rende
             epoch_episode_rewards.append(episode_reward)
             episode_rewards_history.append(episode_reward)
             epoch_episode_steps.append(episode_step)
+            #now_reward+=episode_reward
+            nb_reward_episodes+=1.0
             episode_reward = 0.
             episode_step = 0
             epoch_episodes += 1
             episodes += 1
+
             agent.reset()
-            obs = env.reset()          
-        
+            obs = env.reset()
+            
+        #now_reward = now_reward/nb_reward_episodes
         for t_explore_train_steps in range(nb_explore_train_steps):
           agent.teacher_train(now_reward-last_reward)
           
@@ -162,12 +172,16 @@ def train_meta(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, rende
         
         agent.merge_memory()
         
-        
+        # Train.
         epoch_actor_losses = []
         epoch_critic_losses = []
         epoch_adaptive_distances = []
-        
-        for t_train_steps in range(nb_train_steps):
+        for t_train in range(nb_train_steps):
+          # Adapt param noise, if necessary.
+          if memory.nb_entries >= batch_size and t_train % param_noise_adaption_interval == 0:
+            distance = agent.adapt_param_noise()
+            epoch_adaptive_distances.append(distance)
+
           cl, al = agent.train()
           epoch_critic_losses.append(cl)
           epoch_actor_losses.append(al)
@@ -180,7 +194,7 @@ def train_meta(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, rende
         if eval_env is not None:
           eval_episode_reward = 0.
           for t_rollout in range(nb_eval_steps):
-            eval_action, eval_q = agent.pi(eval_obs, apply_noise=False, compute_Q=True, )
+            eval_action, eval_q = agent.pi(eval_obs, apply_noise=False, compute_Q=True,which_actor = 0)
             eval_obs, eval_r, eval_done, eval_info = eval_env.step(max_action * eval_action)  # scale for execution in env (as far as DDPG is concerned, every action is in [-1, 1])
             if render_eval:
               eval_env.render()
@@ -206,7 +220,7 @@ def train_meta(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, rende
       combined_stats['rollout/Q_mean'] = np.mean(epoch_qs)
       combined_stats['train/loss_actor'] = np.mean(epoch_actor_losses)
       combined_stats['train/loss_critic'] = np.mean(epoch_critic_losses)
-      #combined_stats['train/param_noise_distance'] = np.mean(epoch_adaptive_distances)
+      combined_stats['train/param_noise_distance'] = np.mean(epoch_adaptive_distances)
       combined_stats['total/duration'] = duration
       combined_stats['total/steps_per_second'] = float(t) / float(duration)
       combined_stats['total/episodes'] = episodes
@@ -214,9 +228,9 @@ def train_meta(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, rende
       combined_stats['rollout/actions_std'] = np.std(epoch_actions)
       # Evaluation statistics.
       if eval_env is not None:
-        combined_stats['eval/return'] = eval_episode_rewards
+        combined_stats['eval/return'] = np.mean(eval_episode_rewards)
         combined_stats['eval/return_history'] = np.mean(eval_episode_rewards_history)
-        combined_stats['eval/Q'] = eval_qs
+        combined_stats['eval/Q'] = np.mean(eval_qs)
         combined_stats['eval/episodes'] = len(eval_episode_rewards)
       def as_scalar(x):
         if isinstance(x, np.ndarray):
